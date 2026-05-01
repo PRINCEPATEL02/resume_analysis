@@ -3,7 +3,7 @@ import { Upload, FileText, CheckCircle, AlertCircle, X } from 'lucide-react';
 import { ResumeInfo } from '../types';
 
 interface Props {
-  onResumeUpload: (info: ResumeInfo) => void;
+  onResumeUpload: (info: ResumeInfo, file: File) => void;
 }
 
 const MAX_SIZE_MB = 10;
@@ -53,11 +53,10 @@ export default function ResumeUploader({ onResumeUpload }: Props) {
 
   const handleUpload = () => {
     if (!file) return;
-    onResumeUpload({
-      name: file.name,
-      size: file.size,
-      uploadTimestamp: new Date().toISOString(),
-    });
+    onResumeUpload(
+      { name: file.name, size: file.size, uploadTimestamp: new Date().toISOString() },
+      file
+    );
   };
 
   const handleRemove = () => {
