@@ -9,7 +9,7 @@ import Summary from '../components/Summary';
 import HomePage from './HomePage';
 import { generateFeedback } from '../services/aiService';
 import { extractPdfText } from '../services/pdfService';
-import { generateQuestionsFromResume, FALLBACK_QUESTIONS } from '../services/questionService';
+import { generateQuestionsFromResume, FALLBACK_QUESTIONS, QuestionSource } from '../services/questionService';
 import {
   saveResume, saveAnswers, loadAnswers,
   loadResume, clearSession
@@ -161,6 +161,7 @@ export default function InterviewFlowPage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGeneratingQuestions, setIsGeneratingQuestions] = useState(false);
+  const [questionSource, setQuestionSource] = useState<QuestionSource>('fallback');
 
   // Restore session on mount
   useEffect(() => {
@@ -185,11 +186,13 @@ export default function InterviewFlowPage() {
 
     try {
       const resumeText = await extractPdfText(file);
-      const generated = await generateQuestionsFromResume(resumeText, info.name);
+      const { questions: generated, source } = await generateQuestionsFromResume(resumeText, info.name);
       setQuestions(generated);
+      setQuestionSource(source);
     } catch (err) {
       console.warn('Question generation failed, using fallback:', err);
       setQuestions(FALLBACK_QUESTIONS);
+      setQuestionSource('fallback');
     } finally {
       setIsGeneratingQuestions(false);
     }
@@ -296,14 +299,18 @@ export default function InterviewFlowPage() {
           {/* Top nav: Exit + Change Resume */}
           <QuestionsNavBar onGoHome={goHome} onGoUpload={goUpload} />
 
-          {/* AI-generated badge */}
+          {/* AI-generated / fallback badge */}
           {!isGeneratingQuestions && (
-            <div className="flex items-center gap-2 text-xs text-slate-500">
-              <Sparkles className="w-3.5 h-3.5 text-violet-400" />
-              <span>
-                Questions <span className="text-violet-300 font-medium">personalised from your resume</span>
-                {resumeInfo && <> · <span className="truncate">{resumeInfo.name}</span></>}
-              </span>
+            <div className={`flex items-center gap-2 text-xs px-3 py-2 rounded-xl border
+              ${ questionSource === 'fallback'
+                ? 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+                : 'bg-violet-500/10 border-violet-500/20 text-violet-300'
+              }`}>
+              <Sparkles className="w-3.5 h-3.5 flex-shrink-0" />
+              { questionSource === 'fallback'
+                ? <span>Using <strong>default questions</strong> — restart server & ensure Gemini key is set for personalised questions</span>
+                : <span>Questions <strong>generated from your resume</strong> via {questionSource === 'ai-backend' ? 'Gemini (server)' : questionSource === 'ai-gemini' ? 'Gemini (direct)' : 'OpenAI'}</span>
+              }
             </div>
           )}
 

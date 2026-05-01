@@ -95,7 +95,7 @@ export default function HomePage({ onStart }: Props) {
         {/* Headline */}
         <h1 className="relative text-5xl sm:text-6xl md:text-7xl font-black tracking-tight
                        leading-none mb-6 animate-slide-up">
-          <span className="text-white">Ace Your</span>
+          <span className="text-white">Your</span>
           <br />
           <span className="text-gradient">HR Interview</span>
         </h1>

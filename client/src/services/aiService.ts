@@ -1,4 +1,5 @@
 import { Answer, Feedback, Question } from '../types';
+import { API_URL, GEMINI_KEY, OPENAI_KEY } from '../config';
 
 interface FeedbackOpts {
   answers: Answer[];
@@ -46,34 +47,50 @@ function parseResponse(raw: string): Feedback {
   const parsed: any = JSON.parse(clean.slice(start, end + 1));
   return {
     summary: String(parsed.summary || ''),
-    strengths: Array.isArray(parsed.strengths) ? (parsed.strengths as unknown[]).map(String) : [],
+    strengths:    Array.isArray(parsed.strengths)    ? (parsed.strengths    as unknown[]).map(String) : [],
     improvements: Array.isArray(parsed.improvements) ? (parsed.improvements as unknown[]).map(String) : [],
     overallScore: typeof parsed.overallScore === 'number' ? parsed.overallScore : undefined,
-    rating: typeof parsed.overallScore === 'number' ? Math.round(parsed.overallScore / 2) : undefined,
+    rating:       typeof parsed.overallScore === 'number' ? Math.round(parsed.overallScore / 2) : undefined,
     questionFeedback: Array.isArray(parsed.questionFeedback)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ? (parsed.questionFeedback as any[]).map((x) => ({
           questionId: Number(x.questionId),
-          score: Number(x.score),
-          comment: String(x.comment),
+          score:      Number(x.score),
+          comment:    String(x.comment),
         }))
       : undefined,
   };
 }
 
-// ─── Fetch with timeout helper (replaces AbortSignal.timeout for TS compat) ──
-function fetchWithTimeout(url: string, options: RequestInit, ms: number): Promise<Response> {
-  const controller = new AbortController();
-  const id = setTimeout(() => controller.abort(), ms);
-  return fetch(url, { ...options, signal: controller.signal }).finally(() => clearTimeout(id));
+// ─── Timeout helper ───────────────────────────────────────────────────────────
+function fetchWithTimeout(url: string, options: RequestInit, ms = 20000): Promise<Response> {
+  const ctrl = new AbortController();
+  const id = setTimeout(() => ctrl.abort(), ms);
+  return fetch(url, { ...options, signal: ctrl.signal }).finally(() => clearTimeout(id));
 }
 
-// ─── API Callers ──────────────────────────────────────────────────────────────
+// ─── Provider: Backend proxy (server has real keys — most reliable) ───────────
+async function callBackend(prompt: string): Promise<string> {
+  const res = await fetchWithTimeout(
+    `${API_URL}/api/feedback`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt }),
+    }
+  );
+  if (!res.ok) throw new Error(`Backend /api/feedback → ${res.status}`);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const d: any = await res.json();
+  if (!d?.text) throw new Error('Backend returned empty text');
+  return d.text;
+}
+
+// ─── Provider: Gemini direct (optional client key) ────────────────────────────
 async function callGemini(prompt: string): Promise<string> {
-  const key = import.meta.env.VITE_GEMINI_API_KEY;
-  if (!key) throw new Error('No VITE_GEMINI_API_KEY');
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`,
+  if (!GEMINI_KEY) throw new Error('VITE_GEMINI_API_KEY not set');
+  const res = await fetchWithTimeout(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -83,46 +100,36 @@ async function callGemini(prompt: string): Promise<string> {
       }),
     }
   );
-  if (!res.ok) throw new Error(`Gemini ${res.status}`);
+  if (!res.ok) throw new Error(`Gemini direct → ${res.status}`);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const d: any = await res.json();
   return d?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
 }
 
+// ─── Provider: OpenAI direct (optional client key) ────────────────────────────
 async function callOpenAI(prompt: string): Promise<string> {
-  const key = import.meta.env.VITE_OPENAI_API_KEY;
-  if (!key) throw new Error('No VITE_OPENAI_API_KEY');
-  const res = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
-    body: JSON.stringify({
-      model: 'gpt-3.5-turbo',
-      messages: [{ role: 'user', content: prompt }],
-      max_tokens: 1500,
-      temperature: 0.7,
-    }),
-  });
-  if (!res.ok) throw new Error(`OpenAI ${res.status}`);
+  if (!OPENAI_KEY) throw new Error('VITE_OPENAI_API_KEY not set');
+  const res = await fetchWithTimeout(
+    'https://api.openai.com/v1/chat/completions',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${OPENAI_KEY}` },
+      body: JSON.stringify({
+        model: 'gpt-3.5-turbo',
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: 1500,
+        temperature: 0.7,
+      }),
+    }
+  );
+  if (!res.ok) throw new Error(`OpenAI direct → ${res.status}`);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const d: any = await res.json();
   return d?.choices?.[0]?.message?.content ?? '';
 }
 
-async function callBackend(prompt: string): Promise<string> {
-  const base = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-  const res = await fetch(`${base}/api/feedback`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt }),
-  });
-  if (!res.ok) throw new Error(`Backend ${res.status}`);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const d: any = await res.json();
-  return d?.text ?? '';
-}
-
+// ─── Provider: Ollama local ───────────────────────────────────────────────────
 async function callOllama(prompt: string): Promise<string> {
-  // Use manual timeout instead of AbortSignal.timeout for broader TS compatibility
   const res = await fetchWithTimeout(
     'http://localhost:11434/api/generate',
     {
@@ -132,13 +139,13 @@ async function callOllama(prompt: string): Promise<string> {
     },
     25000
   );
-  if (!res.ok) throw new Error(`Ollama ${res.status}`);
+  if (!res.ok) throw new Error(`Ollama → ${res.status}`);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const d: any = await res.json();
   return d?.response ?? '';
 }
 
-// ─── Mock ─────────────────────────────────────────────────────────────────────
+// ─── Mock fallback ────────────────────────────────────────────────────────────
 export function generateMockFeedback(opts: FeedbackOpts): Feedback {
   const { answers, questions } = opts;
   const answered = answers.filter((a) => (a.text?.trim().length ?? 0) > 0);
@@ -146,30 +153,19 @@ export function generateMockFeedback(opts: FeedbackOpts): Feedback {
     ? Math.round(answered.reduce((s, a) => s + a.text.length, 0) / answered.length)
     : 0;
   const score = Math.min(9, Math.max(3, Math.round(avgLen / 28)));
-
   return {
-    summary: `You completed ${answered.length}/${questions.length} questions with an average response length of ${avgLen} characters. ${
-      avgLen > 200
-        ? 'Your answers demonstrate strong communication and thoughtful reflection.'
-        : avgLen > 80
-        ? 'Your responses show good effort — adding specific examples with the STAR method would make them even more compelling.'
-        : 'Focus on expanding your answers with concrete, specific examples from your experience.'
+    summary: `You completed ${answered.length}/${questions.length} questions (avg ${avgLen} chars). ${
+      avgLen > 200 ? 'Strong communication shown.' : avgLen > 80 ? 'Good effort — add STAR examples.' : 'Expand answers with specific examples.'
     }`,
     strengths: [
-      answered.length === questions.length
-        ? 'Completed all interview questions — shows commitment and preparedness'
-        : `Answered ${answered.length} of ${questions.length} questions`,
-      avgLen > 100
-        ? 'Provided detailed responses that demonstrate communication skills'
-        : 'Addressed each question directly and concisely',
-      'Engaged with the full interview process professionally',
+      answered.length === questions.length ? 'Completed all questions' : `Answered ${answered.length}/${questions.length}`,
+      avgLen > 100 ? 'Detailed responses show communication skills' : 'Concise and direct answers',
+      'Engaged with the full interview process',
     ],
     improvements: [
-      avgLen < 150
-        ? 'Use the STAR method: Situation, Task, Action, Result for richer answers'
-        : 'Continue providing detailed examples — specificity builds credibility',
-      'Tailor responses to highlight skills most relevant to the target role',
-      'Practice out loud to improve fluency and reduce filler words',
+      avgLen < 150 ? 'Use STAR method for richer answers' : 'Keep adding specific examples',
+      'Tailor responses to the target role',
+      'Practice out loud for fluency',
     ],
     overallScore: score,
     rating: Math.round(score / 2),
@@ -179,41 +175,38 @@ export function generateMockFeedback(opts: FeedbackOpts): Feedback {
       return {
         questionId: q.id,
         score: Math.min(9, Math.max(2, Math.round(len / 22))),
-        comment:
-          len === 0
-            ? 'No answer provided. This question is asked in nearly every HR interview — prepare a 60-second response.'
-            : len < 60
-            ? 'Too brief. Expand with a specific personal story or achievement.'
-            : len < 150
-            ? 'Decent start. A concrete example with measurable results would make this memorable.'
-            : 'Well-developed answer with good level of detail and structure.',
+        comment: len === 0 ? 'No answer — prepare a 60-second response.' :
+                 len < 60  ? 'Too brief. Add a personal story or achievement.' :
+                 len < 150 ? 'Good start. Add a measurable result.' :
+                             'Well-developed answer.',
       };
     }),
   };
 }
 
-// ─── Main Export ──────────────────────────────────────────────────────────────
+// ─── Main export ──────────────────────────────────────────────────────────────
+// Order: Backend first (server has keys) → Gemini direct → OpenAI direct → Ollama → Mock
 export async function generateFeedback(opts: FeedbackOpts): Promise<Feedback> {
   const prompt = buildPrompt(opts);
   const providers = [
-    { name: 'Gemini', fn: () => callGemini(prompt) },
-    { name: 'OpenAI', fn: () => callOpenAI(prompt) },
-    { name: 'Backend', fn: () => callBackend(prompt) },
-    { name: 'Ollama', fn: () => callOllama(prompt) },
+    { name: 'Backend',  fn: () => callBackend(prompt) },
+    { name: 'Gemini',   fn: () => callGemini(prompt) },
+    { name: 'OpenAI',   fn: () => callOpenAI(prompt) },
+    { name: 'Ollama',   fn: () => callOllama(prompt) },
   ];
 
   for (const { name, fn } of providers) {
     try {
       const raw = await fn();
       if (raw?.trim()) {
-        console.info(`✅ [AI] Feedback via ${name}`);
+        console.info(`✅ [Feedback] via ${name}`);
         return parseResponse(raw);
       }
     } catch (err) {
-      console.warn(`⚠️ [AI] ${name} failed: ${(err as Error).message}`);
+      console.warn(`⚠️ [Feedback] ${name} failed: ${(err as Error).message}`);
     }
   }
 
-  console.info('ℹ️ [AI] Using smart mock feedback (add an API key for real AI)');
+  console.info('ℹ️ [Feedback] Using mock (no AI provider available)');
   return generateMockFeedback(opts);
 }

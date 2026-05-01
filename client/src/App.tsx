@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Brain, Sun, Moon, Github, Zap } from 'lucide-react';
 import InterviewFlowPage from './pages/InterviewFlowPage';
 import { loadDarkMode, saveDarkMode } from './services/storage';
+import { HAS_GEMINI_KEY, API_URL } from './config';
 
 export default function App() {
   const [darkMode, setDarkMode] = useState(true);
@@ -45,9 +46,9 @@ export default function App() {
             <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full
                             bg-white/[0.04] border border-white/[0.08] text-xs text-slate-500">
               <Zap className="w-3 h-3 text-violet-400" />
-              {import.meta.env.VITE_GEMINI_API_KEY
+              {HAS_GEMINI_KEY
                 ? <span className="text-emerald-400 font-medium">Gemini Active</span>
-                : <span>Mock Mode</span>
+                : <span title={`API: ${API_URL}`}>Backend Mode</span>
               }
             </div>
 
