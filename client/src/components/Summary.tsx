@@ -1,0 +1,250 @@
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  Star, TrendingUp, TrendingDown, BarChart2,
+  Award, RefreshCw, Download, ChevronDown, ChevronUp
+} from 'lucide-react';
+import { Feedback, Question } from '../types';
+
+interface Props {
+  feedback: Feedback;
+  questions: Question[];
+  resumeInfo: { name: string } | null;
+  onRestart: () => void;
+}
+
+function ScoreRing({ score, max = 10 }: { score: number; max?: number }) {
+  const svgRef = useRef<SVGCircleElement>(null);
+  const radius = 40;
+  const circumference = 2 * Math.PI * radius;
+  const pct = score / max;
+
+  useEffect(() => {
+    if (svgRef.current) {
+      svgRef.current.style.strokeDashoffset = String(circumference * (1 - pct));
+    }
+  }, [score, circumference, pct]);
+
+  const color =
+    score >= 8 ? '#10b981' : score >= 6 ? '#8b5cf6' : score >= 4 ? '#f59e0b' : '#ef4444';
+
+  return (
+    <div className="relative inline-flex items-center justify-center">
+      <svg width="100" height="100" viewBox="0 0 100 100">
+        {/* Track */}
+        <circle cx="50" cy="50" r={radius} fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth="8" />
+        {/* Progress */}
+        <circle
+          ref={svgRef}
+          cx="50" cy="50" r={radius}
+          fill="none"
+          stroke={color}
+          strokeWidth="8"
+          strokeLinecap="round"
+          style={{
+            strokeDasharray: circumference,
+            strokeDashoffset: circumference,
+            transition: 'stroke-dashoffset 1.4s cubic-bezier(0.4,0,0.2,1) 0.3s',
+            transform: 'rotate(-90deg)',
+            transformOrigin: '50% 50%',
+          }}
+        />
+      </svg>
+      <div className="absolute text-center">
+        <div className="text-2xl font-bold" style={{ color }}>{score}</div>
+        <div className="text-xs text-slate-500">/{max}</div>
+      </div>
+    </div>
+  );
+}
+
+function StarRating({ rating }: { rating: number }) {
+  return (
+    <div className="flex gap-1">
+      {[1, 2, 3, 4, 5].map((i) => (
+        <Star
+          key={i}
+          className={`w-5 h-5 ${i <= rating ? 'text-amber-400 fill-amber-400' : 'text-slate-700'}`}
+        />
+      ))}
+    </div>
+  );
+}
+
+function QuestionFeedbackRow({ qf, question }: { qf: { score: number; comment: string }; question?: Question }) {
+  const [open, setOpen] = useState(false);
+  const color =
+    qf.score >= 8 ? 'emerald' : qf.score >= 6 ? 'violet' : qf.score >= 4 ? 'amber' : 'red';
+  const colorMap: Record<string, string> = {
+    emerald: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
+    violet:  'bg-violet-500/20 text-violet-400 border-violet-500/30',
+    amber:   'bg-amber-500/20 text-amber-400 border-amber-500/30',
+    red:     'bg-red-500/20 text-red-400 border-red-500/30',
+  };
+
+  return (
+    <div className="card-sm overflow-hidden">
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center gap-3 p-4 text-left hover:bg-white/[0.03] transition-colors"
+      >
+        <span className={`flex-shrink-0 px-2 py-0.5 rounded-full text-xs font-bold border ${colorMap[color]}`}>
+          {qf.score}/10
+        </span>
+        <span className="flex-1 text-sm font-medium text-slate-200 truncate">
+          {question?.icon} {question?.text ?? `Question`}
+        </span>
+        {open ? <ChevronUp className="w-4 h-4 text-slate-500" /> : <ChevronDown className="w-4 h-4 text-slate-500" />}
+      </button>
+      {open && (
+        <div className="px-4 pb-4 text-sm text-slate-400 border-t border-white/[0.06] pt-3 animate-fade-in">
+          {qf.comment}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function Summary({ feedback, questions, resumeInfo, onRestart }: Props) {
+  const score = feedback.overallScore ?? 0;
+
+  const handleDownload = () => {
+    const lines = [
+      'HireReady AI — Interview Feedback Report',
+      '='.repeat(45),
+      '',
+      `Date: ${new Date().toLocaleString()}`,
+      resumeInfo ? `Resume: ${resumeInfo.name}` : '',
+      '',
+      `Overall Score: ${score}/10`,
+      `Rating: ${'★'.repeat(feedback.rating ?? 0)}${'☆'.repeat(5 - (feedback.rating ?? 0))}`,
+      '',
+      '─── SUMMARY ─────────────────────────────────',
+      feedback.summary,
+      '',
+      '─── STRENGTHS ───────────────────────────────',
+      ...feedback.strengths.map((s, i) => `${i + 1}. ${s}`),
+      '',
+      '─── AREAS FOR IMPROVEMENT ───────────────────',
+      ...feedback.improvements.map((s, i) => `${i + 1}. ${s}`),
+      '',
+      '─── PER-QUESTION FEEDBACK ───────────────────',
+      ...(feedback.questionFeedback ?? []).flatMap((qf) => {
+        const q = questions.find((q) => q.id === qf.questionId);
+        return [
+          '',
+          `Q${qf.questionId}: ${q?.text ?? `Question ${qf.questionId}`} (${qf.score}/10)`,
+          `   ${qf.comment}`,
+        ];
+      }),
+      '',
+      '─────────────────────────────────────────────',
+      'Generated by HireReady AI · hireready-ai.vercel.app',
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    const blob = new Blob([lines], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `hireready-feedback-${Date.now()}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="space-y-6 animate-slide-up">
+      {/* Hero Score Card */}
+      <div className="card p-6 text-center space-y-4">
+        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full
+                       bg-violet-500/15 border border-violet-500/25 text-violet-300 text-sm font-medium">
+          <Award className="w-4 h-4" /> Interview Complete
+        </div>
+
+        <div className="flex flex-col items-center gap-3">
+          <ScoreRing score={score} />
+          <div className="space-y-1">
+            <h2 className="text-2xl font-bold text-gradient">
+              {score >= 8 ? 'Outstanding!' : score >= 6 ? 'Well Done!' : score >= 4 ? 'Good Effort!' : 'Keep Practicing!'}
+            </h2>
+            <StarRating rating={feedback.rating ?? 0} />
+          </div>
+        </div>
+
+        <p className="text-sm text-slate-400 leading-relaxed max-w-lg mx-auto">
+          {feedback.summary}
+        </p>
+      </div>
+
+      {/* Strengths & Improvements grid */}
+      <div className="grid md:grid-cols-2 gap-4">
+        {/* Strengths */}
+        <div className="card p-5 space-y-3">
+          <div className="flex items-center gap-2">
+            <TrendingUp className="w-5 h-5 text-emerald-400" />
+            <h3 className="font-semibold text-emerald-300">Strengths</h3>
+          </div>
+          <ul className="space-y-2">
+            {feedback.strengths.map((s, i) => (
+              <li key={i} className="flex items-start gap-2.5 text-sm text-slate-300">
+                <span className="mt-0.5 flex-shrink-0 w-5 h-5 rounded-full bg-emerald-500/20
+                               text-emerald-400 text-xs font-bold flex items-center justify-center">
+                  {i + 1}
+                </span>
+                {s}
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {/* Improvements */}
+        <div className="card p-5 space-y-3">
+          <div className="flex items-center gap-2">
+            <TrendingDown className="w-5 h-5 text-amber-400" />
+            <h3 className="font-semibold text-amber-300">Areas to Improve</h3>
+          </div>
+          <ul className="space-y-2">
+            {feedback.improvements.map((s, i) => (
+              <li key={i} className="flex items-start gap-2.5 text-sm text-slate-300">
+                <span className="mt-0.5 flex-shrink-0 w-5 h-5 rounded-full bg-amber-500/20
+                               text-amber-400 text-xs font-bold flex items-center justify-center">
+                  {i + 1}
+                </span>
+                {s}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+
+      {/* Per-question Feedback */}
+      {feedback.questionFeedback && feedback.questionFeedback.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <BarChart2 className="w-5 h-5 text-violet-400" />
+            <h3 className="font-semibold text-slate-200">Question Breakdown</h3>
+          </div>
+          <div className="space-y-2">
+            {feedback.questionFeedback.map((qf) => (
+              <QuestionFeedbackRow
+                key={qf.questionId}
+                qf={qf}
+                question={questions.find((q) => q.id === qf.questionId)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Action buttons */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        <button onClick={handleDownload} className="btn-secondary flex-1">
+          <Download className="w-4 h-4" /> Download Report
+        </button>
+        <button onClick={onRestart} className="btn-primary flex-1">
+          <RefreshCw className="w-4 h-4" /> New Interview
+        </button>
+      </div>
+    </div>
+  );
+}

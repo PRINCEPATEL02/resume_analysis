@@ -1,0 +1,160 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    @apply bg-slate-950 text-slate-100;
+    background-image:
+      radial-gradient(ellipse at 15% 50%, rgba(124, 58, 237, 0.14) 0%, transparent 55%),
+      radial-gradient(ellipse at 85% 10%, rgba(56, 189, 248, 0.09) 0%, transparent 50%),
+      radial-gradient(ellipse at 50% 90%, rgba(16, 185, 129, 0.07) 0%, transparent 50%);
+    background-attachment: fixed;
+    min-height: 100vh;
+  }
+
+  ::-webkit-scrollbar { width: 5px; }
+  ::-webkit-scrollbar-track { @apply bg-slate-900; }
+  ::-webkit-scrollbar-thumb { @apply bg-slate-600 rounded-full; }
+  ::-webkit-scrollbar-thumb:hover { @apply bg-slate-500; }
+
+  ::selection { @apply bg-violet-600/40; }
+}
+
+@layer components {
+  /* Glass morphism */
+  .glass {
+    @apply bg-white/[0.04] backdrop-blur-2xl border border-white/[0.08];
+  }
+  .glass-hover {
+    @apply hover:bg-white/[0.07] hover:border-white/[0.14] transition-all duration-300;
+  }
+
+  /* Cards */
+  .card {
+    @apply glass rounded-2xl shadow-2xl shadow-black/40;
+  }
+  .card-sm {
+    @apply glass rounded-xl shadow-xl shadow-black/30;
+  }
+
+  /* Buttons */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 font-semibold rounded-xl
+           transition-all duration-200 active:scale-95 disabled:opacity-40
+           disabled:cursor-not-allowed disabled:active:scale-100 select-none;
+  }
+  .btn-primary {
+    @apply btn px-6 py-3 text-sm
+           bg-gradient-to-r from-violet-600 to-indigo-600 text-white
+           hover:from-violet-500 hover:to-indigo-500
+           shadow-lg shadow-violet-900/40 hover:shadow-violet-800/50
+           disabled:shadow-none;
+  }
+  .btn-secondary {
+    @apply btn px-6 py-3 text-sm
+           bg-white/[0.08] text-slate-200 border border-white/[0.12]
+           hover:bg-white/[0.13] hover:border-white/[0.22];
+  }
+  .btn-success {
+    @apply btn px-6 py-3 text-sm
+           bg-gradient-to-r from-emerald-600 to-teal-600 text-white
+           hover:from-emerald-500 hover:to-teal-500
+           shadow-lg shadow-emerald-900/40 disabled:shadow-none;
+  }
+  .btn-danger {
+    @apply btn px-4 py-2 text-sm
+           bg-red-500/[0.15] text-red-400 border border-red-500/30
+           hover:bg-red-500/25 hover:border-red-400/50;
+  }
+  .btn-icon {
+    @apply btn w-10 h-10 rounded-xl bg-white/[0.07] text-slate-300
+           border border-white/[0.1] hover:bg-white/[0.13] hover:text-white;
+  }
+
+  /* Form elements */
+  .textarea-base {
+    @apply w-full bg-slate-900/60 border border-white/[0.1] rounded-xl
+           px-4 py-3 text-slate-100 placeholder-slate-500 text-sm leading-relaxed
+           focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500/40
+           transition-all duration-200 resize-none;
+  }
+
+  /* Badges */
+  .badge {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium;
+  }
+  .badge-violet { @apply badge bg-violet-500/20 text-violet-300 border border-violet-500/30; }
+  .badge-emerald { @apply badge bg-emerald-500/20 text-emerald-300 border border-emerald-500/30; }
+  .badge-amber { @apply badge bg-amber-500/20 text-amber-300 border border-amber-500/30; }
+  .badge-red { @apply badge bg-red-500/20 text-red-300 border border-red-500/30; }
+  .badge-sky { @apply badge bg-sky-500/20 text-sky-300 border border-sky-500/30; }
+
+  /* Text gradients */
+  .text-gradient {
+    @apply bg-gradient-to-r from-violet-400 via-fuchsia-400 to-indigo-400 bg-clip-text text-transparent;
+  }
+  .text-gradient-gold {
+    @apply bg-gradient-to-r from-amber-400 to-orange-400 bg-clip-text text-transparent;
+  }
+  .text-gradient-green {
+    @apply bg-gradient-to-r from-emerald-400 to-teal-400 bg-clip-text text-transparent;
+  }
+}
+
+@layer utilities {
+  /* Recording pulse */
+  .animate-recording { animation: recording 1.5s ease-in-out infinite; }
+  @keyframes recording {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.5); }
+    50% { box-shadow: 0 0 0 14px rgba(239,68,68,0); }
+  }
+
+  /* Wave bars for voice indicator */
+  .wave-bar {
+    @apply bg-red-400 rounded-full w-[3px];
+    animation: wave 0.9s ease-in-out infinite;
+  }
+  .wave-bar:nth-child(1) { animation-delay: 0s; }
+  .wave-bar:nth-child(2) { animation-delay: 0.12s; }
+  .wave-bar:nth-child(3) { animation-delay: 0.24s; }
+  .wave-bar:nth-child(4) { animation-delay: 0.36s; }
+  .wave-bar:nth-child(5) { animation-delay: 0.48s; }
+  @keyframes wave {
+    0%, 100% { height: 4px; opacity: 0.5; }
+    50% { height: 22px; opacity: 1; }
+  }
+
+  /* Progress shimmer */
+  .progress-bar {
+    background: linear-gradient(90deg, #7c3aed 0%, #a78bfa 50%, #7c3aed 100%);
+    background-size: 200% 100%;
+    animation: shimmer 2s linear infinite;
+  }
+  @keyframes shimmer {
+    0% { background-position: 200% center; }
+    100% { background-position: -200% center; }
+  }
+
+  /* Score fill animation */
+  .score-ring {
+    stroke-dasharray: 251;
+    stroke-dashoffset: 251;
+    transition: stroke-dashoffset 1.4s cubic-bezier(0.4, 0, 0.2, 1) 0.3s;
+    transform: rotate(-90deg);
+    transform-origin: 50% 50%;
+  }
+
+  /* Step number */
+  .step-number {
+    @apply flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold;
+  }
+}
